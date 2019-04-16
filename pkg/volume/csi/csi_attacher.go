@@ -63,15 +63,24 @@ func (c *csiAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (string
 		return "", errors.New("missing spec")
 	}
 
+	node := string(nodeName)
 	csiSource, err := getCSISourceFromSpec(spec)
 	if err != nil {
 		klog.Error(log("attacher.Attach failed to get CSI persistent source: %v", err))
 		return "", err
 	}
-
-	node := string(nodeName)
-	pvName := spec.PersistentVolume.GetName()
 	attachID := getAttachmentName(csiSource.VolumeHandle, csiSource.Driver, node)
+	var vaSource storage.VolumeAttachmentSource
+	if spec.InlineVolume == false {
+		pvName := spec.PersistentVolume.GetName()
+		vaSource = storage.VolumeAttachmentSource{
+			PersistentVolumeName: &pvName,
+		}
+	} else {
+		vaSource = storage.VolumeAttachmentSource{
+			InlineCSIVolumeSource: csiSource,
+		}
+	}
 
 	attachment := &storage.VolumeAttachment{
 		ObjectMeta: meta.ObjectMeta{
@@ -80,9 +89,7 @@ func (c *csiAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (string
 		Spec: storage.VolumeAttachmentSpec{
 			NodeName: node,
 			Attacher: csiSource.Driver,
-			Source: storage.VolumeAttachmentSource{
-				PersistentVolumeName: &pvName,
-			},
+			Source:   vaSource,
 		},
 	}
 

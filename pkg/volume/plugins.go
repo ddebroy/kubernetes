@@ -383,6 +383,7 @@ type Spec struct {
 	Volume           *v1.Volume
 	PersistentVolume *v1.PersistentVolume
 	ReadOnly         bool
+	InlineVolume     bool
 }
 
 // Name returns the name of either Volume or PersistentVolume, one of which must not be nil.

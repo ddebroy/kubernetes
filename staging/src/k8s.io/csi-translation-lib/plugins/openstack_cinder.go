@@ -43,6 +43,30 @@ func (t *osCinderCSITranslator) TranslateInTreeStorageClassParametersToCSI(scPar
 	return scParameters, nil
 }
 
+// TranslateInTreeVolumeToCSI takes a Volume with Cinder set from in-tree
+// and converts the Cinder source to a CSIPersistentVolumeSource
+func (t *osCinderCSITranslator) TranslateInTreeVolumeToCSI(volume *v1.Volume) (*v1.PersistentVolume, error) {
+	if volume == nil || volume.Cinder == nil {
+		return nil, fmt.Errorf("volume is nil or Cinder not defined on volume")
+	}
+
+	cinderSource := volume.Cinder
+	pv := &v1.PersistentVolume{
+		Spec: v1.PersistentVolumeSpec{
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				CSI: &v1.CSIPersistentVolumeSource{
+					Driver:           CinderDriverName,
+					VolumeHandle:     cinderSource.VolumeID,
+					ReadOnly:         cinderSource.ReadOnly,
+					FSType:           cinderSource.FSType,
+					VolumeAttributes: map[string]string{},
+				},
+			},
+		},
+	}
+	return pv, nil
+}
+
 // TranslateInTreePVToCSI takes a PV with Cinder set from in-tree
 // and converts the Cinder source to a CSIPersistentVolumeSource
 func (t *osCinderCSITranslator) TranslateInTreePVToCSI(pv *v1.PersistentVolume) (*v1.PersistentVolume, error) {
@@ -90,6 +114,13 @@ func (t *osCinderCSITranslator) TranslateCSIPVToInTree(pv *v1.PersistentVolume) 
 // const.
 func (t *osCinderCSITranslator) CanSupport(pv *v1.PersistentVolume) bool {
 	return pv != nil && pv.Spec.Cinder != nil
+}
+
+// CanSupportInline tests whether the plugin supports a given volume
+// specification from the API.  The spec pointer should be considered
+// const.
+func (g *osCinderCSITranslator) CanSupportInline(volume *v1.Volume) bool {
+	return volume != nil && volume.Cinder != nil
 }
 
 // GetInTreePluginName returns the name of the intree plugin driver

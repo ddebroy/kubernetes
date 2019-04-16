@@ -60,6 +60,41 @@ func (g *gcePersistentDiskCSITranslator) TranslateInTreeStorageClassParametersTo
 	return scParameters, nil
 }
 
+// TranslateInTreeVolumeToCSI takes a Volume with GCEPersistentDisk set from in-tree
+// and converts the GCEPersistentDisk source to a CSIPersistentVolumeSource
+func (t *gcePersistentDiskCSITranslator) TranslateInTreeVolumeToCSI(volume *v1.Volume) (*v1.PersistentVolume, error) {
+	if volume == nil || volume.GCEPersistentDisk == nil {
+		return nil, fmt.Errorf("volume is nil or GCE PD not defined on volume")
+	}
+
+	pdSource := volume.GCEPersistentDisk
+
+	partition := ""
+	if pdSource.Partition != 0 {
+		partition = strconv.Itoa(int(pdSource.Partition))
+	}
+
+	pv := &v1.PersistentVolume{
+		Spec: v1.PersistentVolumeSpec{
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				CSI: &v1.CSIPersistentVolumeSource{
+					Driver: GCEPDDriverName,
+					// TODO: PDName is not going to work for GCE. We need to get this to a volIDZonalFmt
+					// format as done in TranslateInTreePVToCSI. However we do not have access to Labels
+					// in an inline volume. We may have to query the cloud here.
+					VolumeHandle: pdSource.PDName,
+					ReadOnly:     pdSource.ReadOnly,
+					FSType:       pdSource.FSType,
+					VolumeAttributes: map[string]string{
+						"partition": partition,
+					},
+				},
+			},
+		},
+	}
+	return pv, nil
+}
+
 // TranslateInTreePVToCSI takes a PV with GCEPersistentDisk set from in-tree
 // and converts the GCEPersistentDisk source to a CSIPersistentVolumeSource
 func (g *gcePersistentDiskCSITranslator) TranslateInTreePVToCSI(pv *v1.PersistentVolume) (*v1.PersistentVolume, error) {
@@ -148,6 +183,13 @@ func (g *gcePersistentDiskCSITranslator) TranslateCSIPVToInTree(pv *v1.Persisten
 // const.
 func (g *gcePersistentDiskCSITranslator) CanSupport(pv *v1.PersistentVolume) bool {
 	return pv != nil && pv.Spec.GCEPersistentDisk != nil
+}
+
+// CanSupportInline tests whether the plugin supports a given volume
+// specification from the API.  The spec pointer should be considered
+// const.
+func (g *gcePersistentDiskCSITranslator) CanSupportInline(volume *v1.Volume) bool {
+	return volume != nil && volume.GCEPersistentDisk != nil
 }
 
 // GetInTreePluginName returns the name of the intree plugin driver
