@@ -599,6 +599,18 @@ func (dswp *desiredStateOfWorldPopulator) getPVCExtractPV(
 	return pvc, nil
 }
 
+func translateSpec(spec *Spec) (*Spec, error) {
+	csiPV, err := csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
+	if err != nil {
+		return nil, fmt.Errorf("failed to translate in tree pv to CSI: %v", err)
+	}
+	return &volume.Spec{
+		PersistentVolume:                csiPV,
+		ReadOnly:                        spec.ReadOnly,
+		InlineVolumeSpecForCSIMigration: false,
+	}, nil
+}
+
 // getPVSpec fetches the PV object with the given name from the API server
 // and returns a volume.Spec representing it.
 // An error is returned if the call to fetch the PV object fails.
@@ -627,7 +639,18 @@ func (dswp *desiredStateOfWorldPopulator) getPVSpec(
 	}
 
 	volumeGidValue := getPVVolumeGidAnnotationValue(pv)
-	return volume.NewSpecFromPersistentVolume(pv, pvcReadOnly), volumeGidValue, nil
+	spec := volume.NewSpecFromPersistentVolume(pv, pvcReadOnly)
+	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsPVMigratable(pv) {
+		pluginName, _ := csitranslation.GetInTreePluginNameFromSpec(pv, nil)
+		if pluginName != "" {
+			// found an in-tree plugin that supports the spec
+			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
+				spec = translateSpec(spec)
+			}
+		}
+	}
+
+	return spec, volumeGidValue, nil
 }
 
 func (dswp *desiredStateOfWorldPopulator) makeVolumeMap(containers []v1.Container) (map[string]bool, map[string]bool) {

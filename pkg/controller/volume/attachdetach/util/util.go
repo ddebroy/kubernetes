@@ -108,6 +108,18 @@ func getPVCFromCacheExtractPV(namespace string, name string, pvcLister coreliste
 	return pvc.Spec.VolumeName, pvc.UID, nil
 }
 
+func translateSpec(spec *Spec) (*Spec, error) {
+	csiPV, err := csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
+	if err != nil {
+		return nil, fmt.Errorf("failed to translate in tree pv to CSI: %v", err)
+	}
+	return &volume.Spec{
+		PersistentVolume:                csiPV,
+		ReadOnly:                        spec.ReadOnly,
+		InlineVolumeSpecForCSIMigration: false,
+	}, nil
+}
+
 // getPVSpecFromCache fetches the PV object with the given name from the shared
 // internal PV store and returns a volume.Spec representing it.
 // This method returns an error if a PV object does not exist in the cache with
@@ -138,7 +150,18 @@ func getPVSpecFromCache(name string, pvcReadOnly bool, expectedClaimUID types.UI
 	// may be mutated by another consumer.
 	clonedPV := pv.DeepCopy()
 
-	return volume.NewSpecFromPersistentVolume(clonedPV, pvcReadOnly), nil
+	spec := volume.NewSpecFromPersistentVolume(clonedPV, pvcReadOnly)
+	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsPVMigratable(clonedPV) {
+		pluginName, _ := csitranslation.GetInTreePluginNameFromSpec(clonedPV, nil)
+		if pluginName != "" {
+			// found an in-tree plugin that supports the spec
+			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
+				spec = translateSpec(spec)
+			}
+		}
+	}
+
+	return spec, nil
 }
 
 // DetermineVolumeAction returns true if volume and pod needs to be added to dswp
