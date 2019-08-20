@@ -527,8 +527,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	BoundServiceAccountTokenVolume:      {Default: false, PreRelease: featuregate.Alpha},
 	CRIContainerLogRotation:             {Default: true, PreRelease: featuregate.Beta},
 	deprecatedGCERegionalPersistentDisk: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.17
-	CSIMigration:                        {Default: false, PreRelease: featuregate.Alpha},
-	CSIMigrationGCE:                     {Default: false, PreRelease: featuregate.Alpha},
+	CSIMigration:                        {Default: true, PreRelease: featuregate.Alpha},
+	CSIMigrationGCE:                     {Default: true, PreRelease: featuregate.Alpha},
 	CSIMigrationAWS:                     {Default: false, PreRelease: featuregate.Alpha},
 	CSIMigrationAzureDisk:               {Default: false, PreRelease: featuregate.Alpha},
 	CSIMigrationAzureFile:               {Default: false, PreRelease: featuregate.Alpha},
