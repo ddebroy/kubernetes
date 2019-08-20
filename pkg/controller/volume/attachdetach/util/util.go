@@ -21,7 +21,9 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	csitranslation "k8s.io/csi-translation-lib"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
 	"k8s.io/kubernetes/pkg/volume"
@@ -108,7 +110,7 @@ func getPVCFromCacheExtractPV(namespace string, name string, pvcLister coreliste
 	return pvc.Spec.VolumeName, pvc.UID, nil
 }
 
-func translateSpec(spec *Spec) (*Spec, error) {
+func translateSpec(spec *volume.Spec) (*volume.Spec, error) {
 	csiPV, err := csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate in tree pv to CSI: %v", err)
@@ -156,7 +158,10 @@ func getPVSpecFromCache(name string, pvcReadOnly bool, expectedClaimUID types.UI
 		if pluginName != "" {
 			// found an in-tree plugin that supports the spec
 			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
-				spec = translateSpec(spec)
+				spec, err = translateSpec(spec)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

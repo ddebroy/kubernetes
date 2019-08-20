@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientset "k8s.io/client-go/kubernetes"
+	csitranslation "k8s.io/csi-translation-lib"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
@@ -599,7 +600,7 @@ func (dswp *desiredStateOfWorldPopulator) getPVCExtractPV(
 	return pvc, nil
 }
 
-func translateSpec(spec *Spec) (*Spec, error) {
+func translateSpec(spec *volume.Spec) (*volume.Spec, error) {
 	csiPV, err := csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate in tree pv to CSI: %v", err)
@@ -645,7 +646,10 @@ func (dswp *desiredStateOfWorldPopulator) getPVSpec(
 		if pluginName != "" {
 			// found an in-tree plugin that supports the spec
 			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
-				spec = translateSpec(spec)
+				spec, err = translateSpec(spec)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
