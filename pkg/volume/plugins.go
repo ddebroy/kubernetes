@@ -693,7 +693,7 @@ func (pm *VolumePluginMgr) IsPluginMigratableBySpec(spec *Spec) (bool, error) {
 	if spec == nil {
 		return false, fmt.Errorf("could not find if plugin is migratable because volume spec is nil")
 	}
-	pluginName, err := csitranslation.GetInTreePluginNameFromSpec(spec.PersistentVolume, spec.Volume)
+	pluginName, _ := csitranslation.GetInTreePluginNameFromSpec(spec.PersistentVolume, spec.Volume)
 	// todo: diff err from no plugin matching
 	if pluginName == "" {
 		return false, nil
