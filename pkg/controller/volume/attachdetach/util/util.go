@@ -18,6 +18,7 @@ package util
 
 import (
 	"fmt"
+	"errors"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -84,11 +85,12 @@ func CreateVolumeSpec(podVolume v1.Volume, podNamespace string, pvcLister coreli
 	// informer it may be mutated by another consumer.
 	clonedPodVolume := podVolume.DeepCopy()
 	spec := volume.NewSpecFromVolume(clonedPodVolume)
-	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsPVMigratable(pv) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsInlineMigratable(clonedPodVolume) {
 		pluginName, _ := csitranslation.GetInTreePluginNameFromSpec(nil, clonedPodVolume)
 		if pluginName != "" {
 			// found an in-tree plugin that supports the spec
 			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
+				var err error
 				spec, err = translateSpec(spec)
 				if err != nil {
 					return nil, err
