@@ -552,14 +552,15 @@ func (dswp *desiredStateOfWorldPopulator) createVolumeSpec(
 	// Do not return the original volume object, since the source could mutate it
 	clonedPodVolume := podVolume.DeepCopy()
 	spec := volume.NewSpecFromVolume(clonedPodVolume)
-	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsPVMigratable(pv) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsInlineMigratable(clonedPodVolume) {
 		pluginName, _ := csitranslation.GetInTreePluginNameFromSpec(nil, clonedPodVolume)
 		if pluginName != "" {
 			// found an in-tree plugin that supports the spec
 			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
+				var err error
 				spec, err = translateSpec(spec)
 				if err != nil {
-					return nil, "", err
+					return nil, nil, "", err
 				}
 			}
 		}
