@@ -65,6 +65,7 @@ func TranslateInTreeInlineVolumeToCSI(volume *v1.Volume) (*v1.PersistentVolume, 
 				volumeMode := v1.PersistentVolumeFilesystem
 				csiPV.Spec.VolumeMode = &volumeMode
 			}
+			return csiPV, nil
 		}
 	}
 	return nil, fmt.Errorf("could not find in-tree plugin translation logic for %#v", volume.Name)
