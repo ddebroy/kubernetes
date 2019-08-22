@@ -24,9 +24,9 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	csitranslation "k8s.io/csi-translation-lib"
-	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
 )
@@ -83,8 +83,21 @@ func CreateVolumeSpec(podVolume v1.Volume, podNamespace string, pvcLister coreli
 	// Do not return the original volume object, since it's from the shared
 	// informer it may be mutated by another consumer.
 	clonedPodVolume := podVolume.DeepCopy()
+	spec := volume.NewSpecFromVolume(clonedPodVolume)
+	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsPVMigratable(pv) {
+		pluginName, _ := csitranslation.GetInTreePluginNameFromSpec(nil, clonedPodVolume)
+		if pluginName != "" {
+			// found an in-tree plugin that supports the spec
+			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
+				spec, err = translateSpec(spec)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 
-	return volume.NewSpecFromVolume(clonedPodVolume), nil
+	return spec, nil
 }
 
 // getPVCFromCacheExtractPV fetches the PVC object with the given namespace and
@@ -112,14 +125,24 @@ func getPVCFromCacheExtractPV(namespace string, name string, pvcLister coreliste
 }
 
 func translateSpec(spec *volume.Spec) (*volume.Spec, error) {
-	csiPV, err := csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
+	var csiPV *v1.PersistentVolume
+	var err error
+	inlineVolume := false
+	if spec.PersistentVolume != nil {
+		csiPV, err = csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
+	} else if spec.Volume != nil {
+		csiPV, err = csitranslation.TranslateInTreeInlineVolumeToCSI(spec.Volume)
+		inlineVolume = true
+	} else {
+		return &volume.Spec{}, errors.New("not a valid volume spec")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate in tree pv to CSI: %v", err)
 	}
 	return &volume.Spec{
 		PersistentVolume:                csiPV,
 		ReadOnly:                        spec.ReadOnly,
-		InlineVolumeSpecForCSIMigration: false,
+		InlineVolumeSpecForCSIMigration: inlineVolume,
 	}, nil
 }
 

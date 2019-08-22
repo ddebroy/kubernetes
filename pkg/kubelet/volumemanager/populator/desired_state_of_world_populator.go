@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"errors"
 	"k8s.io/klog"
 
 	"k8s.io/api/core/v1"
@@ -550,8 +551,21 @@ func (dswp *desiredStateOfWorldPopulator) createVolumeSpec(
 
 	// Do not return the original volume object, since the source could mutate it
 	clonedPodVolume := podVolume.DeepCopy()
+	spec := volume.NewSpecFromVolume(clonedPodVolume)
+	if utilfeature.DefaultFeatureGate.Enabled(features.CSIMigration) && csitranslation.IsPVMigratable(pv) {
+		pluginName, _ := csitranslation.GetInTreePluginNameFromSpec(nil, clonedPodVolume)
+		if pluginName != "" {
+			// found an in-tree plugin that supports the spec
+			if volume.IsCSIMigrationEnabledForPluginByName(pluginName) {
+				spec, err = translateSpec(spec)
+				if err != nil {
+					return nil, "", err
+				}
+			}
+		}
+	}
 
-	return nil, volume.NewSpecFromVolume(clonedPodVolume), "", nil
+	return nil, spec, "", nil
 }
 
 // getPVCExtractPV fetches the PVC object with the given namespace and name from
@@ -601,14 +615,24 @@ func (dswp *desiredStateOfWorldPopulator) getPVCExtractPV(
 }
 
 func translateSpec(spec *volume.Spec) (*volume.Spec, error) {
-	csiPV, err := csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
+	var csiPV *v1.PersistentVolume
+	var err error
+	inlineVolume := false
+	if spec.PersistentVolume != nil {
+		csiPV, err = csitranslation.TranslateInTreePVToCSI(spec.PersistentVolume)
+	} else if spec.Volume != nil {
+		csiPV, err = csitranslation.TranslateInTreeInlineVolumeToCSI(spec.Volume)
+		inlineVolume = true
+	} else {
+		return &volume.Spec{}, errors.New("not a valid volume spec")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate in tree pv to CSI: %v", err)
 	}
 	return &volume.Spec{
 		PersistentVolume:                csiPV,
 		ReadOnly:                        spec.ReadOnly,
-		InlineVolumeSpecForCSIMigration: false,
+		InlineVolumeSpecForCSIMigration: inlineVolume,
 	}, nil
 }
 
