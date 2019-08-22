@@ -61,7 +61,7 @@ func TranslateInTreeInlineVolumeToCSI(volume *v1.Volume) (*v1.PersistentVolume, 
 				return nil, err
 			}
 			// for inline, always set volumeMode to FileSystem
-			if csiPV != nil && csiPV.Spec != nil {
+			if csiPV != nil {
 				volumeMode := v1.PersistentVolumeFilesystem
 				csiPV.Spec.VolumeMode = &volumeMode
 			}
